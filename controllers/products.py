@@ -107,7 +107,7 @@ async def search_product(request: SearchRequest):
         "Fine/Very Fine (FN/VF)": (5.5, 6.0),
         "Very Good/Fine (VG/FN)": (4.5, 5.0),
         "Very Good (VG)": (3.5, 4.0),
-        "Good/Very Good (G/VG)": (2.5,3.0),
+        "Good/Very Good (G/VG)": (2.5, 3.0),
         "Good (G)": (1.8, 2.0),
         "Fair/Good (F/G)": (1.0, 1.5),
         "Fair (F)": (0.5, 1.0),
@@ -128,14 +128,27 @@ async def search_product(request: SearchRequest):
                 break
 
     result = []
-    for name, items in categorized.items():
+    for name, (low, high) in grade_ranges.items():
+        items = categorized[name]
         if items:
             avg = round(sum(p["price_value"] for p in items) / len(items), 2)
-            range_str = items[0][
-                "range"
-            ]  # take the range string from the first product
+            range_str = f"{name} {low}, {high}"
             result.append(
-                {"range": range_str, "average_price": f"${avg}", "products": items}
+                {
+                    "range": range_str,
+                    "average_price": f"${avg}",
+                    "products": items,
+                }
+            )
+        else:
+            # 🔹 Add Not Available entry if no products in this range
+            range_str = f"{name} {low}, {high}"
+            result.append(
+                {
+                    "range": range_str,
+                    "average_price": "Not Available",
+                    "products": [],
+                }
             )
 
     return {

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -58,7 +59,8 @@
       overflow: hidden;
     }
 
-    th, td {
+    th,
+    td {
       padding: 12px;
       text-align: center;
       border: 1px solid #ccc;
@@ -112,9 +114,9 @@
       width: 98.5%;
       padding: 10px;
     }
-
   </style>
 </head>
+
 <body>
 
   <div class="search-container container">
@@ -127,78 +129,85 @@
   <div id="toast"></div>
 
   <script>
-     function showToast(message, color) {
-            const toast = document.getElementById("toast");
-            toast.innerText = message;
-            toast.style.backgroundColor = color;
-            toast.className = "show";
+    function showToast(message, color) {
+      const toast = document.getElementById("toast");
+      toast.innerText = message;
+      toast.style.backgroundColor = color;
+      toast.className = "show";
 
-            setTimeout(() => {
-                toast.className = toast.className.replace("show", "");
-            }, 3000);
-        }
+      setTimeout(() => {
+        toast.className = toast.className.replace("show", "");
+      }, 3000);
+    }
 
     async function searchProduct() {
-        const name = document.getElementById("searchInput").value.trim();
-        if (!name) {
-            showToast("Please enter a product name!", "red");
-            return;
+      const name = document.getElementById("searchInput").value.trim();
+      if (!name) {
+        showToast("Please enter a product name!", "red");
+        return;
+      }
+
+      const tableContainer = document.getElementById("tableContainer");
+      const productContainer = document.getElementById("productContainer");
+
+      tableContainer.innerHTML = "Loading...";
+      tableContainer.style.display = "block";
+      productContainer.style.display = "none";
+
+      try {
+        const api_url = "https://automation.proshipping.shop/api/api/product/search"
+        const local_url = "http://localhost:8000/api/product/search"
+        const response = await fetch(api_url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name })
+        });
+
+        const data = await response.json();
+
+        if (data.error || data.message) {
+          const msg = data.error || data.message;
+          showToast(msg, "red");
+          tableContainer.innerHTML = msg;
+          return;
         }
 
-        const tableContainer = document.getElementById("tableContainer");
-        const productContainer = document.getElementById("productContainer");
-
-        tableContainer.innerHTML = "Loading...";
-        tableContainer.style.display = "block";
-        productContainer.style.display = "none";
-
-        try {
-            const response = await fetch("https://automation.proshipping.shop/api/api/product/search", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name })
-            });
-
-            const data = await response.json();
-
-            if (data.error || data.message) {
-                const msg = data.error || data.message;
-                showToast(msg, "red");
-                tableContainer.innerHTML = msg;
-                return;
-            }
-
-            renderTable(data.grades_summary);
-        } catch (err) {
-            console.error(err);
-            showToast("Error fetching data from server.", "red");
-            tableContainer.innerHTML = "Error fetching data from server.";
-        }
+        renderTable(data.grades_summary);
+      } catch (err) {
+        console.error(err);
+        showToast("Error fetching data from server.", "red");
+        tableContainer.innerHTML = "Error fetching data from server.";
+      }
     }
 
     function renderTable(grades) {
       const tableContainer = document.getElementById("tableContainer");
 
       let html = `
-        <table>
-          <thead>
-            <tr>
-              <th>Range</th>
-              <th>Average Price</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
+    <table>
+      <thead>
+        <tr>
+          <th>Range</th>
+          <th>Average Price</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
 
       grades.forEach((g, index) => {
+        // check if any product title is "Not Available"
+        const hasUnavailable = g.products?.length == 0;
+
         html += `
-          <tr>
-            <td>${g.range}</td>
-            <td>${g.average_price}</td>
-            <td><button class="btn" onclick="showProducts(${index})">Show Products</button></td>
-          </tr>
-        `;
+      <tr>
+        <td>${g.range}</td>
+        <td>${g.average_price}</td>
+        <td>
+          ${hasUnavailable ? "-" : `<button class="btn" onclick="showProducts(${index})">Show Products</button>`}
+        </td>
+      </tr>
+    `;
       });
 
       html += "</tbody></table>";
@@ -213,33 +222,33 @@
       const tableContainer = document.getElementById("tableContainer");
 
       let html = `
-        <h2 style="text-align:center;">${selected.range} - ${selected.average_price}</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Grade</th>
-              <th>Price</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
+    <h2 style="text-align:center;">${selected.range} - ${selected.average_price}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Grade</th>
+          <th>Price</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
 
       selected.products.forEach(p => {
         html += `
-          <tr>
-            <td>${p.title}</td>
-            <td>${p.cgc_grade || "N/A"}</td>
-            <td>${p.price}</td>
-          </tr>
-        `;
+      <tr>
+        <td>${p.title}</td>
+        <td>${p.cgc_grade || "N/A"}</td>
+        <td>${p.price}</td>
+      </tr>
+    `;
       });
 
       html += `
-          </tbody>
-        </table>
-        <button class="back-btn" onclick="backToMain()">← Back</button>
-      `;
+      </tbody>
+    </table>
+    <button class="back-btn" onclick="backToMain()">← Back</button>
+  `;
 
       productContainer.innerHTML = html;
       tableContainer.style.display = "none";
@@ -253,4 +262,5 @@
   </script>
 
 </body>
+
 </html>
