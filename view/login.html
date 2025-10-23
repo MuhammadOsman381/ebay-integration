@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <title>Login Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+
+       #toast {
+  visibility: hidden;
+  min-width: 250px;
+  margin-left: -125px;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 8px;
+  padding: 16px;
+  position: fixed;
+  z-index: 1000;
+  left: 50%;
+  top: -60px; /* hidden above the screen initially */
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity 0.5s, top 0.5s ease;
+}
+
+#toast.show {
+  visibility: visible;
+  opacity: 1;
+  top: 30px; /* slides down into view */
+}
+
+        .login-container {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 20px;
+            width: 400px;
+        }
+
+        h2 {
+            margin-bottom: 1.5rem;
+        }
+
+        input {
+            width: 95%;
+            padding: 0.6rem;
+            margin: 0.5rem 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        button {
+            background: black;
+            color: white;
+            padding: 0.5rem;
+            width: 100%;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: gray;
+        }
+
+        .output {
+            margin-top: 1rem;
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="login-container">
+        <h3>Login to your account</h3>
+        <input type="email" id="email" placeholder="Enter Email" required><br>
+        <input type="password" id="password" placeholder="Enter Password" required><br>
+        <button onclick="handleLogin()">Login</button>
+    </div>
+
+    <script>
+
+        function showToast(message, color) {
+            const toast = document.getElementById("toast");
+            toast.innerText = message;
+            toast.style.backgroundColor = color;
+            toast.className = "show";
+
+            setTimeout(() => {
+                toast.className = toast.className.replace("show", "");
+            }, 3000);
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            if (!email || !password) {
+                showToast("Please fill in all fields", "red");
+                return;
+            }
+            const payload = { email, password }
+            try {
+                const response = await axios.post("http://localhost:8000/api/auth/login", {
+                    email,
+                    password
+                });
+                if(response?.data?.token){
+                    localStorage.setItem("token", response.data.token);
+                    window.location.href = "admin.html";
+                    showToast("Login successful!","green");
+                }
+            } catch (error) {
+                console.error("❌ Error:", error.response?.data || error.message);
+                showToast(
+                  "Login failed: " + (error.response?.data?.detail || "Something went wrong"),
+                "red"
+                );
+            }
+        }
+
+        window.onload = function () {
+            const token = localStorage.getItem("token")
+            if (token) {
+                window.location.href = "admin.html";
+            } else {
+                return
+            }
+        };
+
+    </script>
+
+    <div id="toast"></div>
+</body>
+
+</html>
