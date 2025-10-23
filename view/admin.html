@@ -163,7 +163,7 @@
             try {
                 const authToken = localStorage.getItem("token");
                 const res = await axios.post(
-                    "http://localhost:8000/api/api/key/create",
+                    "https://automation.proshipping.shop/api/api/key/create",
                     payload,
                     {
                         headers: {
