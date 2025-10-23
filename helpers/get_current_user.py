@@ -14,7 +14,7 @@ async def get_current_user(
 ):
     try:
         token = credentials.credentials
-        decoded_token = jwt.decode(token, os.environ.get("JWT_SECRET"), algorithms=["HS256"])
+        decoded_token = jwt.decode(token, "ebay-project", algorithms=["HS256"])
         user_id = decoded_token["id"]
         user = await User.get(id=user_id)
         return user

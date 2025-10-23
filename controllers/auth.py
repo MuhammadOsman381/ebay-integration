@@ -39,8 +39,7 @@ async def login(data: Login):
         ph.verify(user.password, data.password)  
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid password")
-
-    token = create_access_token({"sub": user.email})
+    token = create_access_token({"id": user.id})
     return {
         "message": "Login successful",
         "token": token
