@@ -4,99 +4,89 @@ import re
 import os
 import requests
 from model.key import Key
+import time
+import random
+import random
+import time
+import re
+import requests
+from math import ceil
 
 router = APIRouter(prefix="/api/product", tags=["Products"])
 
 
+
 class SearchRequest(BaseModel):
     name: str
-    min_grade: float = None
-    max_grade: float = None
-    category: str = None
 
+
+APIFY_API_TOKEN = os.environ.get("APIFY_API_TOKEN")
 
 @router.post("/search")
 async def search_product(request: SearchRequest):
-    product_name = request.name
-    key = await Key.get_or_none()
-    token = key.token if key else None
-    api_key = key.api_key if key else None
+    raw_name = request.name
+    clean_name = raw_name.lower()
+    clean_name = re.sub(r'[^a-z0-9\s]', '', clean_name)
+    clean_name = re.sub(r'\s+', ' ', clean_name).strip()
+    product_name = clean_name.replace(" ", "+")
 
-    if not token and not api_key:
-        return {
-            "error": "Missing eBay credentials. Please set a token or API key first."
-        }
+    search_url = f"https://www.ebay.com/sch/i.html?_nkw={product_name}&_sacat=0&LH_Complete=1&LH_Sold=1"
+    actor_url = f"https://api.apify.com/v2/acts/3x1t~ebay-scraper-ppr/runs?token={APIFY_API_TOKEN}"
+
+    apify_payload = {
+    "startUrls": [{"url": search_url}],
+    "maxItems": 400,
+    "extendOutputFunction": "async ({data, item}) => return item;",
+    "proxyConfiguration": {"useApifyProxy": True},
+    "maxResults": 400,
+    "maxPagesPerStartUrl": 50
+}
+
+
+    run_response = requests.post(actor_url, json=apify_payload).json()
+    if "data" not in run_response:
+        return {"error": "Failed to start Apify Actor", "details": run_response}
+
+    run_id = run_response["data"]["id"]
+
+    for _ in range(600):
+        time.sleep(2)
+        status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_API_TOKEN}"
+        status = requests.get(status_url).json()["data"]["status"]
+        if status in ["SUCCEEDED", "FAILED"]:
+            break
+
+    dataset_url = f"https://api.apify.com/v2/actor-runs/{run_id}/dataset/items?token={APIFY_API_TOKEN}"
+    items_response = requests.get(dataset_url).json()
+
+    print(items_response)
 
     products = []
 
-    try:
-        if token:
-            url = f"https://api.ebay.com/buy/browse/v1/item_summary/search?q={product_name}"
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-                "Content-Type": "application/json",
-            }
-            response = requests.get(url, headers=headers)
-            data = response.json()
-            items = data.get("itemSummaries", [])
-            for item in items:
-                title = item.get("title", "")
-                price_info = item.get("price", {})
-                price = price_info.get("value")
-                product = {
-                    "title": title,
-                    "price": f"${price}" if price else "N/A",
-                    "price_value": float(price) if price else None,
-                    "image": item.get("image", {}).get("imageUrl"),
-                    "item_url": item.get("itemWebUrl"),
-                }
-                match = re.search(r"CGC\s*(\d+\.?\d*)", title)
-                product["cgc_grade"] = float(match.group(1)) if match else None
-                products.append(product)
-
-        elif api_key:
-            url = f"https://svcs.ebay.com/services/search/FindingService/v1"
-            headers = {
-                "X-EBAY-SOA-SECURITY-APPNAME": api_key,
-                "X-EBAY-SOA-OPERATION-NAME": "findItemsByKeywords",
-                "X-EBAY-SOA-REQUEST-DATA-FORMAT": "JSON",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "keywords": product_name,
-                "paginationInput": {"entriesPerPage": 50, "pageNumber": 1},
-            }
-            response = requests.post(url, headers=headers, json=payload)
-            data = response.json()
-            items = (
-                data.get("findItemsByKeywordsResponse", [{}])[0]
-                .get("searchResult", [{}])[0]
-                .get("item", [])
-            )
-            for item in items:
-                title = item.get("title", [None])[0]
-                price_data = item.get("sellingStatus", [{}])[0].get(
-                    "currentPrice", [{}]
-                )[0]
-                price = price_data.get("__value__")
-                product = {
-                    "title": title,
-                    "price": f"${price}" if price else "N/A",
-                    "price_value": float(price) if price else None,
-                    "image": item.get("galleryURL", [None])[0],
-                    "item_url": item.get("viewItemURL", [None])[0],
-                }
-                match = re.search(r"CGC\s*(\d+\.?\d*)", title or "")
-                product["cgc_grade"] = float(match.group(1)) if match else None
-                products.append(product)
-
-        if not products:
-            return {"message": "No items found for your search."}
-
-    except Exception as e:
-        return {"error": str(e)}
-
+    for item in items_response:
+        title = item.get("title", "")
+        price_data = item.get("price", {})
+        price_value = None
+        if isinstance(price_data, dict):
+            current = price_data.get("current", {})
+            if isinstance(current, dict) and current.get("value"):
+                price_value = float(current["value"])
+            elif price_data.get("value"):
+                price_value = float(price_data["value"])
+        img = item.get("image", {}).get("url", "")
+        url = item.get("url", "")
+        match = re.search(r'CGC\b(?:\s+(?:SS|Signature\s+Series))?\s*[:\-]?\s*(\d{1,2}(?:\.\d)?)', title, re.IGNORECASE)
+        grade = float(match.group(1)) if match else None
+        products.append({
+            "title": title,
+            "price": f"${price_value}" if price_value else 0,
+            "price_value": price_value,
+            "image": img,
+            "item_url": url,
+            "cgc_grade": grade
+        })
+    if not products:
+        return {"message": "No sold products found using Apify."}
     grade_ranges = {
         "Mint (M)": (10.0, 10.0),
         "Near Mint/Mint (NM/M)": (9.8, 9.9),
@@ -113,46 +103,30 @@ async def search_product(request: SearchRequest):
         "Fair (F)": (0.5, 1.0),
         "Poor (P)": (0.1, 0.5),
     }
-
-    categorized = {k: [] for k in grade_ranges.keys()}
-
+    categorized = {k: [] for k in grade_ranges}
     for product in products:
         grade = product.get("cgc_grade")
-        price = product.get("price_value")
-        if grade is None or not price:
+        if grade is None:
             continue
         for name, (low, high) in grade_ranges.items():
             if low <= grade <= high:
                 product["range"] = f"{name} {low}, {high}"
                 categorized[name].append(product)
                 break
-
     result = []
     for name, (low, high) in grade_ranges.items():
         items = categorized[name]
-        if items:
-            avg = round(sum(p["price_value"] for p in items) / len(items), 2)
-            range_str = f"{name} {low}, {high}"
-            result.append(
-                {
-                    "range": range_str,
-                    "average_price": f"${avg}",
-                    "products": items,
-                }
-            )
-        else:
-            # 🔹 Add Not Available entry if no products in this range
-            range_str = f"{name} {low}, {high}"
-            result.append(
-                {
-                    "range": range_str,
-                    "average_price": "Not Available",
-                    "products": [],
-                }
-            )
-
+        price = (
+            f"${round(sum(p['price_value'] for p in items if p['price_value']) / len(items), 2)}"
+            if items else "Not Available"
+        )
+        result.append({
+            "range": f"{name} {low}, {high}",
+            "average_price": price,
+            "products": items
+        })
     return {
-        "searched_for": product_name,
+        "searched_for": request.name,
         "grades_summary": result,
         "total_products": len(products),
     }
